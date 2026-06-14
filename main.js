@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const { app, BrowserWindow, ipcMain, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, dialog, safeStorage } = require('electron');
 const { loadConfig } = require('./src/main/services/config');
 const { createDatabase } = require('./src/main/services/database');
 const { createTelegramService } = require('./src/main/services/telegram');
@@ -11,7 +11,6 @@ let mainWindow;
 let db;
 let telegram;
 let watcher;
-let config;
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -28,7 +27,7 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,   // ← Security fix: enable Chromium sandbox
     },
   });
 
@@ -59,10 +58,10 @@ async function tryRestoreFromCloud() {
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send('sync:status', { message: 'Restoring vault index from the cloud...' });
       }
-      
+
       const backupPath = path.join(app.getPath('temp'), `telvault-restore-${Date.now()}.sqlite`);
       const success = await telegram.downloadLatestBackup(backupPath);
-      
+
       if (success) {
         await watcher.closeAll();
         await db.replaceDatabaseFile(backupPath);
@@ -80,7 +79,7 @@ async function tryRestoreFromCloud() {
 }
 
 function registerIpc() {
-  // Window controls (frameless)
+  // ── Window controls (frameless) ──────────────────────────────────────────
   ipcMain.handle('win:minimize', () => mainWindow?.minimize());
   ipcMain.handle('win:maximize', () => {
     if (mainWindow?.isMaximized()) mainWindow.unmaximize();
@@ -89,7 +88,19 @@ function registerIpc() {
   ipcMain.handle('win:close', () => mainWindow?.close());
   ipcMain.handle('win:isMaximized', () => mainWindow?.isMaximized() ?? false);
 
-  // Auth
+  // ── Onboarding ────────────────────────────────────────────────────────────
+  ipcMain.handle('onboarding:hasCredentials', () => db.hasCredentials());
+
+  ipcMain.handle('onboarding:saveCredentials', async (_event, { apiId, apiHash }) => {
+    if (!apiId || !apiHash) throw new Error('Both API ID and API Hash are required.');
+    const numId = Number(apiId);
+    if (!Number.isInteger(numId) || numId <= 0) throw new Error('API ID must be a positive integer.');
+    if (typeof apiHash !== 'string' || apiHash.trim().length < 10) throw new Error('API Hash appears invalid.');
+    db.setCredentials({ apiId: numId, apiHash: apiHash.trim() });
+    return { ok: true };
+  });
+
+  // ── Auth ──────────────────────────────────────────────────────────────────
   ipcMain.handle('auth:status', async () => {
     const authenticated = await telegram.hasSession();
     return { authenticated, telegramConfigured: telegram.getConfigStatus().configured };
@@ -114,7 +125,7 @@ function registerIpc() {
     return { ok: true };
   });
 
-  // Files
+  // ── Files ─────────────────────────────────────────────────────────────────
   ipcMain.handle('files:selectFolder', async () => {
     const result = await dialog.showOpenDialog(mainWindow, {
       title: 'Select a project folder',
@@ -130,7 +141,7 @@ function registerIpc() {
     return diffFolder(project.folder_path, fileStates);
   });
 
-  // Projects / Vaults
+  // ── Projects / Vaults ─────────────────────────────────────────────────────
   ipcMain.handle('projects:list', () => db.listProjects());
 
   ipcMain.handle('projects:create', async (_event, payload) => {
@@ -152,7 +163,7 @@ function registerIpc() {
   ipcMain.handle('projects:watchStatuses', () => watcher.getAllStatuses());
   ipcMain.handle('projects:watchStatus', (_event, projectId) => watcher.getStatus(Number(projectId)));
 
-  // Versions / Snapshots
+  // ── Versions / Snapshots ──────────────────────────────────────────────────
   ipcMain.handle('versions:list', (_event, projectId) => db.listVersions(Number(projectId)));
 
   ipcMain.handle('versions:commit', async (_event, payload) => {
@@ -172,7 +183,6 @@ function registerIpc() {
     const safeName = project.name.replace(/[^\w.-]+/g, '-').slice(0, 48) || 'vault';
     const zipPath = path.join(tempDir, `${safeName}-v${versionNum}-${Date.now()}.zip`);
 
-    // Optional selective file archiving
     const selectedFiles = Array.isArray(payload.selectedFiles) && payload.selectedFiles.length > 0
       ? payload.selectedFiles
       : null;
@@ -202,7 +212,6 @@ function registerIpc() {
         fileSize: zipInfo.size,
       });
 
-      // Update the index!
       const filesToUpdate = selectedFiles
         ? changedFiles.filter((f) => selectedFiles.includes(f.relativePath))
         : changedFiles;
@@ -249,9 +258,9 @@ function registerIpc() {
 }
 
 app.whenReady().then(() => {
-  config = loadConfig(__dirname);
-  db = createDatabase(app.getPath('userData'));
-  telegram = createTelegramService(db, config);
+  loadConfig(__dirname); // App-level config (no secrets)
+  db = createDatabase(app.getPath('userData'), safeStorage);
+  telegram = createTelegramService(db);
   watcher = createWatcherService({
     db,
     notify: (channel, payload) => {
@@ -261,7 +270,7 @@ app.whenReady().then(() => {
   registerIpc();
   createWindow();
   watcher.watchAll();
-  
+
   telegram.hasSession().then(async (hasSession) => {
     if (hasSession) await tryRestoreFromCloud();
   });

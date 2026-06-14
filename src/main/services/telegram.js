@@ -2,17 +2,19 @@ const { TelegramClient, Api } = require('telegram');
 const { StringSession } = require('telegram/sessions');
 const bigInt = require('big-integer');
 
-function createTelegramService(db, config) {
+function createTelegramService(db) {
   let client = null;
   let pendingPhoneCodeHash = null;
   let pendingPhoneNumber = null;
   let qrLogin = null;
 
   function getCredentials() {
-    if (!config.telegram.configured) {
-      throw new Error('Telegram app credentials are missing. Add TELEGRAM_API_ID and TELEGRAM_API_HASH to .env.');
+    const { apiId: rawId, apiHash } = db.getCredentials();
+    const apiId = Number(rawId);
+    if (!apiId || !apiHash) {
+      throw new Error('Telegram API credentials are not configured. Please complete the onboarding setup.');
     }
-    return { apiId: config.telegram.apiId, apiHash: config.telegram.apiHash };
+    return { apiId, apiHash };
   }
 
   async function getClient() {
@@ -69,7 +71,7 @@ function createTelegramService(db, config) {
     },
 
     getConfigStatus() {
-      return { configured: config.telegram.configured };
+      return { configured: db.hasCredentials() };
     },
 
     async startQrLogin() {

@@ -134,3 +134,12 @@ dist
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Electron-builder output
+release/
+release-builds/
+
+# Local databases
+telvault.sqlite
+telvault.sqlite-wal
+telvault.sqlite-shm

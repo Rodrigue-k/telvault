@@ -6,6 +6,10 @@ function ensureBridge() {
 }
 
 export const api = {
+  onboarding: {
+    hasCredentials:  ()        => ensureBridge().onboarding.hasCredentials(),
+    saveCredentials: (payload) => ensureBridge().onboarding.saveCredentials(payload),
+  },
   auth: {
     status: () => ensureBridge().auth.status(),
     startQrLogin: () => ensureBridge().auth.startQrLogin(),

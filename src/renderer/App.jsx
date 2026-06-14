@@ -4,10 +4,12 @@ import { TitleBar } from './components/TopMenuBar';
 import { AuthPage } from './pages/AuthPage';
 import { NewProjectPage } from './pages/NewProjectPage';
 import { ProjectDetailPage } from './pages/ProjectDetailPage';
+import OnboardingPage from './pages/OnboardingPage';
 import { api } from './services/api.jsx';
 
 export default function App() {
   const [booting, setBooting] = useState(true);
+  const [needsOnboarding, setNeedsOnboarding] = useState(false);
   const [authenticated, setAuthenticated] = useState(false);
   const [telegramConfigured, setTelegramConfigured] = useState(true);
   const [projects, setProjects] = useState([]);
@@ -34,6 +36,13 @@ export default function App() {
     setBooting(true);
     setError('');
     try {
+      // Check for first-run: no credentials stored yet
+      const hasCredentials = await api.onboarding.hasCredentials();
+      if (!hasCredentials) {
+        setNeedsOnboarding(true);
+        return;
+      }
+      setNeedsOnboarding(false);
       const status = await api.auth.status();
       setTelegramConfigured(status.telegramConfigured);
       setAuthenticated(status.authenticated);
@@ -91,6 +100,17 @@ export default function App() {
         <span className="h-5 w-5 animate-spin rounded-full border-2 border-border-subtle border-t-accent mr-3" />
         Loading TelVault…
       </div>
+    );
+  }
+
+  if (needsOnboarding) {
+    return (
+      <OnboardingPage
+        onComplete={async () => {
+          setNeedsOnboarding(false);
+          await boot();
+        }}
+      />
     );
   }
 

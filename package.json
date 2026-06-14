@@ -9,8 +9,9 @@
     "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
     "build": "cross-env NODE_ENV=production webpack --config webpack.config.js --mode production",
     "start": "npm run build && electron .",
-    "dist": "npm run build && electron-builder",
-    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "generate-icon": "node scripts/generate-icon.js",
+    "rebuild": "electron-rebuild -f -w better-sqlite3 -w sharp",
+    "dist": "npm run generate-icon && npm run build && electron-builder --win",
     "postinstall": "electron-builder install-app-deps"
   },
   "keywords": [],
@@ -26,7 +27,6 @@
     "qrcode.react": "^4.2.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "sharp": "^0.35.1",
     "telegram": "^2.26.22"
   },
   "devDependencies": {
@@ -43,6 +43,7 @@
     "html-webpack-plugin": "^5.6.7",
     "postcss": "^8.5.15",
     "postcss-loader": "^8.2.1",
+    "sharp": "^0.35.1",
     "style-loader": "^4.0.0",
     "tailwindcss": "^3.4.19",
     "wait-on": "^9.0.10",
@@ -53,18 +54,50 @@
   "build": {
     "appId": "app.telvault.desktop",
     "productName": "TelVault",
+    "copyright": "Copyright © 2025 TelVault",
+    "asar": true,
+    "asarUnpack": [
+      "node_modules/better-sqlite3/**/*"
+    ],
+    "compression": "maximum",
+    "electronLanguages": ["fr", "en-US"],
+    "extraFiles": [],
+    "extraResources": [],
     "files": [
       "main.js",
       "preload.js",
       "dist/**/*",
       "src/main/**/*",
-      "package.json"
+      "assets/**/*",
+      "package.json",
+      "!src/renderer/**/*",
+      "!scripts/**/*",
+      "!**/*.map",
+      "!**/test/**",
+      "!**/tests/**",
+      "!**/*.md"
     ],
+    "npmRebuild": true,
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "assets"
     },
     "win": {
-      "target": "nsis"
+      "target": [
+        { "target": "nsis", "arch": ["x64"] }
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "TelVault",
+      "installerIcon": "assets/icon.ico",
+      "uninstallerIcon": "assets/icon.ico",
+      "deleteAppDataOnUninstall": false
     }
   }
 }

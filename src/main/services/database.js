@@ -2,13 +2,38 @@ const path = require('path');
 const fs = require('fs');
 const Database = require('better-sqlite3');
 
+// Keys whose values must be encrypted at rest via safeStorage (DPAPI on Windows).
+const SENSITIVE_KEYS = new Set(['telegram_session', 'telegram_api_id', 'telegram_api_hash']);
+
 function now() {
   return new Date().toISOString();
 }
 
-function createDatabase(userDataPath) {
+/**
+ * @param {string} userDataPath
+ * @param {{ encryptString: (v: string) => Buffer, decryptString: (b: Buffer) => string } | null} safeStorage
+ *   Pass Electron's safeStorage when available (null = dev/plaintext fallback).
+ */
+function createDatabase(userDataPath, safeStorage = null) {
   fs.mkdirSync(userDataPath, { recursive: true });
   let sqlite = new Database(path.join(userDataPath, 'telvault.sqlite'));
+
+  // Encrypt / decrypt helpers — gracefully degrade if safeStorage unavailable.
+  function encrypt(value) {
+    if (!safeStorage?.isEncryptionAvailable()) return `plain:${value}`;
+    const buf = safeStorage.encryptString(value);
+    return `enc:${buf.toString('base64')}`;
+  }
+  function decrypt(stored) {
+    if (!stored) return null;
+    if (stored.startsWith('enc:')) {
+      const buf = Buffer.from(stored.slice(4), 'base64');
+      return safeStorage.decryptString(buf);
+    }
+    // Legacy plain: prefix or pre-encryption raw values
+    if (stored.startsWith('plain:')) return stored.slice(6);
+    return stored; // backward-compatible raw value
+  }
   sqlite.pragma('journal_mode = WAL');
   
   sqlite.exec(`
@@ -51,15 +76,35 @@ function createDatabase(userDataPath) {
 
   return {
     getSetting(key) {
-      return sqlite.prepare('SELECT value FROM settings WHERE key = ?').get(key)?.value || null;
+      const row = sqlite.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+      if (!row) return null;
+      return SENSITIVE_KEYS.has(key) ? decrypt(row.value) : row.value;
     },
     setSetting(key, value) {
+      const stored = SENSITIVE_KEYS.has(key) ? encrypt(value) : value;
       sqlite
         .prepare('INSERT INTO settings(key, value) VALUES(?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value')
-        .run(key, value);
+        .run(key, stored);
     },
     deleteSetting(key) {
       sqlite.prepare('DELETE FROM settings WHERE key = ?').run(key);
+    },
+
+    // --- Telegram API credentials (encrypted) ---
+    hasCredentials() {
+      const id = sqlite.prepare('SELECT value FROM settings WHERE key = ?').get('telegram_api_id');
+      const hash = sqlite.prepare('SELECT value FROM settings WHERE key = ?').get('telegram_api_hash');
+      return Boolean(id?.value && hash?.value);
+    },
+    getCredentials() {
+      return {
+        apiId: this.getSetting('telegram_api_id'),
+        apiHash: this.getSetting('telegram_api_hash'),
+      };
+    },
+    setCredentials({ apiId, apiHash }) {
+      this.setSetting('telegram_api_id', String(apiId));
+      this.setSetting('telegram_api_hash', String(apiHash));
     },
     listProjects() {
       return sqlite.prepare('SELECT * FROM projects ORDER BY COALESCE(last_commit_at, created_at) DESC').all();
