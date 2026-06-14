@@ -260,6 +260,68 @@ function createTelegramService(db, config) {
       await active.downloadMedia(message, { outputFile: outputPath });
       return outputPath;
     },
+    
+    // --- Cloud Sync ---
+    async getSystemSyncChannel() {
+      const active = await getClient();
+      if (!(await active.isUserAuthorized())) return null;
+
+      for await (const dialog of active.iterDialogs({ limit: 100 })) {
+        if (dialog.title === 'TelVault - System Sync' && dialog.isChannel) {
+          return serializeChannel(dialog.entity);
+        }
+      }
+
+      const result = await active.invoke(
+        new Api.channels.CreateChannel({
+          title: 'TelVault - System Sync',
+          about: 'DO NOT DELETE. This channel stores your TelVault configuration and database backups.',
+          megagroup: false,
+          broadcast: true,
+        })
+      );
+      const channel = result.chats?.[0];
+      if (!channel) throw new Error('Could not create System Sync channel.');
+      return serializeChannel(channel);
+    },
+
+    async uploadDatabaseBackup(filePath) {
+      const channelId = await this.getSystemSyncChannel();
+      if (!channelId) return null;
+      
+      const active = await getClient();
+      const entity = resolveChannel(channelId);
+      
+      return active.sendFile(entity, {
+        file: filePath,
+        caption: `Backup - ${new Date().toISOString()}`,
+        forceDocument: true,
+      });
+    },
+
+    async downloadLatestBackup(destinationPath) {
+      const active = await getClient();
+      if (!(await active.isUserAuthorized())) return false;
+
+      let channelId;
+      for await (const dialog of active.iterDialogs({ limit: 100 })) {
+        if (dialog.title === 'TelVault - System Sync' && dialog.isChannel) {
+          channelId = serializeChannel(dialog.entity);
+          break;
+        }
+      }
+      
+      if (!channelId) return false;
+
+      const entity = resolveChannel(channelId);
+      const messages = await active.getMessages(entity, { limit: 1 });
+      const message = Array.isArray(messages) ? messages[0] : messages;
+      
+      if (!message?.media || !message?.document) return false;
+      
+      await active.downloadMedia(message, { outputFile: destinationPath });
+      return true;
+    }
   };
 }
 

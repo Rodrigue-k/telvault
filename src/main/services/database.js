@@ -8,7 +8,7 @@ function now() {
 
 function createDatabase(userDataPath) {
   fs.mkdirSync(userDataPath, { recursive: true });
-  const sqlite = new Database(path.join(userDataPath, 'telvault.sqlite'));
+  let sqlite = new Database(path.join(userDataPath, 'telvault.sqlite'));
   sqlite.pragma('journal_mode = WAL');
   
   sqlite.exec(`
@@ -124,6 +124,18 @@ function createDatabase(userDataPath) {
         }
       });
       trx();
+    },
+    
+    // --- Cloud Sync Helpers ---
+    async backup(destinationPath) {
+      await sqlite.backup(destinationPath);
+    },
+    
+    async replaceDatabaseFile(sourcePath) {
+      sqlite.close();
+      await fs.promises.copyFile(sourcePath, path.join(userDataPath, 'telvault.sqlite'));
+      sqlite = new Database(path.join(userDataPath, 'telvault.sqlite'));
+      sqlite.pragma('journal_mode = WAL');
     }
   };
 }

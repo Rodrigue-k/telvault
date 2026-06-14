@@ -32,5 +32,9 @@ export const api = {
     list: (projectId) => ensureBridge().versions.list(projectId),
     commit: (payload) => ensureBridge().versions.commit(payload),
     download: (payload) => ensureBridge().versions.download(payload),
+    onUploadProgress: (callback) => ensureBridge().versions.onUploadProgress(callback),
   },
+  sync: {
+    onStatus: (callback) => ensureBridge().sync.onStatus(callback),
+  }
 };

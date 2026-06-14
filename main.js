@@ -1,4 +1,5 @@
 const path = require('path');
+const fs = require('fs');
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const { loadConfig } = require('./src/main/services/config');
 const { createDatabase } = require('./src/main/services/database');
@@ -39,6 +40,45 @@ function createWindow() {
   }
 }
 
+// --- Cloud Sync ---
+async function syncToCloud() {
+  try {
+    const backupPath = path.join(app.getPath('temp'), `telvault-backup-${Date.now()}.sqlite`);
+    await db.backup(backupPath);
+    await telegram.uploadDatabaseBackup(backupPath);
+    await fs.promises.rm(backupPath, { force: true });
+  } catch (err) {
+    console.error('Failed to sync to cloud:', err);
+  }
+}
+
+async function tryRestoreFromCloud() {
+  try {
+    const projects = db.listProjects();
+    if (projects.length === 0) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('sync:status', { message: 'Restoring vault index from the cloud...' });
+      }
+      
+      const backupPath = path.join(app.getPath('temp'), `telvault-restore-${Date.now()}.sqlite`);
+      const success = await telegram.downloadLatestBackup(backupPath);
+      
+      if (success) {
+        await watcher.closeAll();
+        await db.replaceDatabaseFile(backupPath);
+        watcher.watchAll();
+        await fs.promises.rm(backupPath, { force: true });
+      }
+    }
+  } catch (err) {
+    console.error('Failed to restore from cloud:', err);
+  } finally {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('sync:status', { message: null });
+    }
+  }
+}
+
 function registerIpc() {
   // Window controls (frameless)
   ipcMain.handle('win:minimize', () => mainWindow?.minimize());
@@ -58,9 +98,17 @@ function registerIpc() {
   ipcMain.handle('auth:startQrLogin', async () => telegram.startQrLogin());
   ipcMain.handle('auth:getQrLoginStatus', async () => telegram.getQrLoginStatus());
   ipcMain.handle('auth:cancelQrLogin', async () => telegram.cancelQrLogin());
-  ipcMain.handle('auth:submitQrPassword', async (_event, payload) => telegram.submitQrPassword(payload.password));
+  ipcMain.handle('auth:submitQrPassword', async (_event, password) => {
+    const res = await telegram.submitQrPassword(password);
+    await tryRestoreFromCloud();
+    return res;
+  });
   ipcMain.handle('auth:sendCode', async (_event, payload) => telegram.sendCode(payload));
-  ipcMain.handle('auth:signIn', async (_event, payload) => telegram.signIn(payload));
+  ipcMain.handle('auth:signIn', async (_event, payload) => {
+    const res = await telegram.signIn(payload);
+    await tryRestoreFromCloud();
+    return res;
+  });
   ipcMain.handle('auth:logout', async () => {
     await telegram.logout();
     return { ok: true };
@@ -96,6 +144,7 @@ function registerIpc() {
       tgChannelId: String(channel.id),
     });
     watcher.watchProject(project);
+    syncToCloud(); // Fire & forget
     return project;
   });
 
@@ -168,6 +217,7 @@ function registerIpc() {
       );
 
       await watcher.evaluate(project.id);
+      syncToCloud(); // Fire & forget
       return version;
     } finally {
       await zipInfo.cleanup();
@@ -211,6 +261,10 @@ app.whenReady().then(() => {
   registerIpc();
   createWindow();
   watcher.watchAll();
+  
+  telegram.hasSession().then(async (hasSession) => {
+    if (hasSession) await tryRestoreFromCloud();
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

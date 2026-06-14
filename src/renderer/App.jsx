@@ -28,6 +28,8 @@ export default function App() {
     return rows;
   };
 
+  const [syncStatus, setSyncStatus] = useState(null);
+
   const boot = async () => {
     setBooting(true);
     setError('');
@@ -42,6 +44,16 @@ export default function App() {
       setBooting(false);
     }
   };
+
+  useEffect(() => {
+    return api.sync.onStatus((payload) => {
+      setSyncStatus(payload.message);
+      if (payload.message === null) {
+        // Refresh projects after sync completes
+        loadProjects();
+      }
+    });
+  }, []);
 
   useEffect(() => { boot(); }, []);
 
@@ -101,6 +113,14 @@ export default function App() {
         onLogout={logout}
         projectName={selectedProject?.name}
       />
+      {syncStatus && (
+        <div className="absolute inset-0 z-50 flex flex-col items-center justify-center bg-bg-deep/80 backdrop-blur-sm">
+          <div className="flex flex-col items-center gap-4 rounded-xl border border-border-subtle bg-bg-surface p-8 shadow-xl">
+            <span className="h-6 w-6 animate-spin rounded-full border-2 border-accent border-t-transparent" />
+            <p className="text-[13px] font-medium text-text-primary">{syncStatus}</p>
+          </div>
+        </div>
+      )}
       <div className="flex flex-1 overflow-hidden">
         <Sidebar
           projects={projects}

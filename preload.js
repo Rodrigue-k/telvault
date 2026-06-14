@@ -45,4 +45,11 @@ contextBridge.exposeInMainWorld('telvault', {
       return () => ipcRenderer.removeListener('versions:uploadProgress', handler);
     },
   },
+  sync: {
+    onStatus: (callback) => {
+      const handler = (_event, payload) => callback(payload);
+      ipcRenderer.on('sync:status', handler);
+      return () => ipcRenderer.removeListener('sync:status', handler);
+    }
+  }
 });
