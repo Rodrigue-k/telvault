@@ -1,22 +1,32 @@
 {
   "name": "telvault",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Desktop versioning backed by private Telegram channels.",
+  "main": "main.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "dev:renderer": "cross-env NODE_ENV=development webpack serve --config webpack.config.js --mode development",
+    "dev:electron": "wait-on http://localhost:3000 && cross-env NODE_ENV=development electron .",
+    "dev": "concurrently -k \"npm:dev:renderer\" \"npm:dev:electron\"",
+    "build": "cross-env NODE_ENV=production webpack --config webpack.config.js --mode production",
+    "start": "npm run build && electron .",
+    "dist": "npm run build && electron-builder",
+    "rebuild": "electron-rebuild -f -w better-sqlite3",
+    "postinstall": "electron-builder install-app-deps"
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "type": "commonjs",
   "dependencies": {
     "archiver": "^8.0.0",
     "better-sqlite3": "^12.10.0",
     "big-integer": "^1.6.52",
-    "electron": "^42.4.0",
+    "chokidar": "^5.0.0",
+    "dotenv": "^17.4.2",
+    "qrcode.react": "^4.2.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
+    "sharp": "^0.35.1",
     "telegram": "^2.26.22"
   },
   "devDependencies": {
@@ -27,12 +37,34 @@
     "babel-loader": "^10.1.1",
     "concurrently": "^10.0.3",
     "cross-env": "^10.1.0",
+    "css-loader": "^7.1.4",
+    "electron": "^39.8.10",
     "electron-builder": "^26.15.3",
     "html-webpack-plugin": "^5.6.7",
     "postcss": "^8.5.15",
+    "postcss-loader": "^8.2.1",
+    "style-loader": "^4.0.0",
     "tailwindcss": "^3.4.19",
     "wait-on": "^9.0.10",
     "webpack": "^5.107.2",
-    "webpack-cli": "^7.0.3"
+    "webpack-cli": "^7.0.3",
+    "webpack-dev-server": "^5.2.5"
+  },
+  "build": {
+    "appId": "app.telvault.desktop",
+    "productName": "TelVault",
+    "files": [
+      "main.js",
+      "preload.js",
+      "dist/**/*",
+      "src/main/**/*",
+      "package.json"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "win": {
+      "target": "nsis"
+    }
   }
 }

@@ -1,0 +1,105 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+}
+
+body {
+  font-family: 'Inter', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #e6edf3;
+  background: #0d1117;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+button, input, textarea, select {
+  font: inherit;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
+
+/* Custom checkbox styles */
+.tv-checkbox {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid #484f58;
+  border-radius: 3px;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+  position: relative;
+  transition: all 0.1s ease;
+}
+.tv-checkbox:checked {
+  background: #2f81f7;
+  border-color: #2f81f7;
+}
+.tv-checkbox:checked::after {
+  content: '';
+  position: absolute;
+  top: 1px;
+  left: 3px;
+  width: 5px;
+  height: 8px;
+  border: 2px solid white;
+  border-top: none;
+  border-left: none;
+  transform: rotate(45deg);
+}
+.tv-checkbox:indeterminate {
+  background: #2f81f7;
+  border-color: #2f81f7;
+}
+.tv-checkbox:indeterminate::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 2px;
+  right: 2px;
+  height: 2px;
+  background: white;
+  transform: translateY(-50%);
+}
+
+/* Drag region for frameless window */
+.drag-region {
+  -webkit-app-region: drag;
+}
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* Smooth transitions */
+* {
+  transition-property: background-color, border-color, color, opacity;
+  transition-duration: 100ms;
+  transition-timing-function: ease;
+}
